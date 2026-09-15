@@ -22,13 +22,18 @@ class TaskTest extends TestCase {
         $this->patchJson('/api/tasks/'.$id,['status'=>'todo'])->assertNotFound();
     }
     public function test_failed_event_insert_rolls_back_task_creation(): void {
-        // Use the real SQLite connection and force only task_events inserts to fail.
-        // This verifies the actual DB transaction instead of replacing Laravel's DB manager with a mock.
-        DB::statement("CREATE TRIGGER fail_task_event_insert BEFORE INSERT ON task_events BEGIN SELECT RAISE(ABORT, 'Event storage unavailable'); END;");
+        // Fail only the task_events insert while keeping Laravel's real database manager intact.
+        // This lets the controller's real transaction prove that task creation is rolled back.
+        DB::connection()->beforeExecuting(function (string $query, array $bindings, $connection): void {
+            $normalized=strtolower($query);
+            if (str_starts_with(ltrim($normalized),'insert') && str_contains($normalized,'task_events')) {
+                throw new \RuntimeException('Event storage unavailable');
+            }
+        });
+
         $response=$this->withToken(str_repeat('a',32))->postJson('/api/tasks',['title'=>'Must roll back']);
-        DB::statement('DROP TRIGGER fail_task_event_insert');
 
         $response->assertStatus(500);
-        $this->assertSame(0, \App\Models\Task::count());
+        $this->assertDatabaseMissing('tasks',['title'=>'Must roll back']);
     }
 }
