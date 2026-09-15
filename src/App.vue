@@ -6,8 +6,16 @@ const visible=computed(()=>tasks.value.filter(t=>filter.value==='all'||t.status=
 const completed=computed(()=>tasks.value.filter(t=>t.status==='done').length);
 async function request(path='',method='GET',body) {
   const response=await fetch('/api/tasks'+path,{method,headers:{Accept:'application/json','Content-Type':'application/json',Authorization:'Bearer '+token.value.trim()},body:body?JSON.stringify(body):undefined});
-  const data=response.status===204?null:await response.json();
-  if(!response.ok) throw new Error(data?.errors?Object.values(data.errors).flat().join(' '):data?.message||'Request failed');
+  const text=response.status===204?'':await response.text();
+  let data=null;
+  if(text){
+    try{data=JSON.parse(text);}
+    catch{
+      const preview=text.replace(/\s+/g,' ').trim().slice(0,180);
+      throw new Error(response.ok?'Server returned an invalid JSON response.':`Server error ${response.status}${preview?`: ${preview}`:''}`);
+    }
+  }
+  if(!response.ok) throw new Error(data?.errors?Object.values(data.errors).flat().join(' '):data?.message||`Request failed (${response.status})`);
   return data;
 }
 async function action(fn) {busy.value=true;error.value='';try{await fn();}catch(e){error.value=e.message;}finally{busy.value=false;}}
