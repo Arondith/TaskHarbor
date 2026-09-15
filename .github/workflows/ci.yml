@@ -1,0 +1,23 @@
+name: TaskHarbor checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test && npm run build
+      - run: node setup.mjs
+      - run: docker compose up --build -d
+      - run: node smoke.mjs
+      - run: docker compose exec -T api vendor/bin/phpunit
+      - if: failure()
+        run: docker compose logs --tail=100
+      - if: always()
+        run: docker compose down

@@ -1,0 +1,38 @@
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: taskharbor
+      MYSQL_USER: taskharbor
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Run setup first}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Run setup first}
+    volumes: ["database:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u taskharbor taskharbor -e 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  api:
+    build: ./backend
+    environment:
+      APP_KEY: ${APP_KEY:?Run setup first}
+      APP_ENV: local
+      APP_DEBUG: "false"
+      LOG_CHANNEL: stderr
+      API_TOKEN: ${API_TOKEN:?Run setup first}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: taskharbor
+      DB_USERNAME: taskharbor
+      DB_PASSWORD: ${DB_PASSWORD}
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+    depends_on:
+      db: {condition: service_healthy}
+  web:
+    build: .
+    ports: ["127.0.0.1:8082:80"]
+    depends_on: [api]
+volumes:
+  database:
